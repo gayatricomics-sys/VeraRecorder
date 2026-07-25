@@ -1,0 +1,16 @@
+node_modules/
+venv/
+dist/
+dist-electron/
+release/
+build/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+python/build/
+python/dist/
+python/*.spec
+electron/dist/
+electron/dist-electron/
+electron/release/

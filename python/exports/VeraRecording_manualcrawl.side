@@ -1,0 +1,132 @@
+{
+  "id": "project-id-placeholder",
+  "version": "2.0",
+  "name": "VeraRecording_manualcrawl",
+  "url": "http://www.testfire.net",
+  "tests": [
+    {
+      "id": "test-id-placeholder",
+      "name": "Login Flow",
+      "commands": [
+        {
+          "id": "cmd-prep-open",
+          "comment": "Veracode Best Practice: Always open base URL",
+          "command": "open",
+          "target": "/",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "cmd-prep-wait",
+          "comment": "Veracode Best Practice: Wait for page load",
+          "command": "waitForPageToLoad",
+          "target": "30000",
+          "targets": [],
+          "value": ""
+        },
+        {
+          "id": "cmd-0",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=id(\"HyperLink1\")/IMG[1]",
+          "targets": [
+            [
+              "xpath=id(\"HyperLink1\")/IMG[1]",
+              "xpath"
+            ]
+          ],
+          "value": ""
+        },
+        {
+          "id": "cmd-1",
+          "comment": "",
+          "command": "click",
+          "target": "id=AccountLink",
+          "targets": [
+            [
+              "id=AccountLink",
+              "xpath"
+            ]
+          ],
+          "value": ""
+        },
+        {
+          "id": "cmd-2",
+          "comment": "",
+          "command": "type",
+          "target": "name=uid",
+          "targets": [
+            [
+              "name=uid",
+              "xpath"
+            ]
+          ],
+          "value": "test"
+        },
+        {
+          "id": "cmd-3",
+          "comment": "",
+          "command": "type",
+          "target": "name=passw",
+          "targets": [
+            [
+              "name=passw",
+              "xpath"
+            ]
+          ],
+          "value": "test"
+        },
+        {
+          "id": "cmd-4",
+          "comment": "",
+          "command": "click",
+          "target": "name=btnSubmit",
+          "targets": [
+            [
+              "name=btnSubmit",
+              "xpath"
+            ]
+          ],
+          "value": ""
+        },
+        {
+          "id": "cmd-5",
+          "comment": "",
+          "command": "click",
+          "target": "xpath=id(\"MenuHyperLink6\")",
+          "targets": [
+            [
+              "xpath=id(\"MenuHyperLink6\")",
+              "xpath"
+            ]
+          ],
+          "value": ""
+        },
+        {
+          "id": "cmd-post-verify",
+          "comment": "Veracode Best Practice: Validate successful sign in",
+          "command": "waitForElementVisible",
+          "target": "css=body",
+          "targets": [],
+          "value": "30000"
+        }
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "suite-id",
+      "name": "Default Suite",
+      "persistSession": false,
+      "parallel": false,
+      "timeout": 300,
+      "tests": [
+        "test-id-placeholder"
+      ]
+    }
+  ],
+  "urls": [
+    "http://www.testfire.net"
+  ],
+  "plugins": []
+}
