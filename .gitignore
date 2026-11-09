@@ -24,3 +24,5 @@ python/drivers/chrome/
 python/drivers/chromedriver
 python/drivers/chromedriver.exe
 python/drivers/VERSION.txt
+
+offline/electron-cache/
