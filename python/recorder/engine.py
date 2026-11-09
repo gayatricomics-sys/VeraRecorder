@@ -13,6 +13,9 @@ class RecorderEngine:
         
     def start_recording(self, url: str):
         print(f"Starting recording on {url}")
+        if self.driver:
+            # Don't orphan a previous Chrome session.
+            self.stop_recording()
         self.driver = self.browser.launch_chrome(url)
         self.is_recording = True
         
@@ -60,16 +63,24 @@ class RecorderEngine:
                 }
             }, true);
             
+            // Absolute XPath (e.g. //*[@id="main"]/div[2]/a[1] or /html/body/div[1]).
+            // The old version returned "BODY/DIV[1]", a relative path that
+            // matches nothing when evaluated against the document.
             function getXPath(elm) {
-                if (elm.id !== '') return 'id("' + elm.id + '")';
-                if (elm === document.body) return elm.tagName;
+                if (!elm || elm.nodeType !== 1) return '';
+                if (elm.id && !/["']/.test(elm.id)) return '//*[@id="' + elm.id + '"]';
+                if (elm === document.documentElement) return '/html';
+                if (elm === document.body) return '/html/body';
+                let parent = elm.parentNode;
+                if (!parent || parent.nodeType !== 1) return '/' + elm.tagName.toLowerCase();
                 let ix = 0;
-                let siblings = elm.parentNode.childNodes;
+                let siblings = parent.childNodes;
                 for (let i = 0; i < siblings.length; i++) {
                     let sibling = siblings[i];
-                    if (sibling === elm) return getXPath(elm.parentNode) + '/' + elm.tagName + '[' + (ix + 1) + ']';
+                    if (sibling === elm) return getXPath(parent) + '/' + elm.tagName.toLowerCase() + '[' + (ix + 1) + ']';
                     if (sibling.nodeType === 1 && sibling.tagName === elm.tagName) ix++;
                 }
+                return '';
             }
         })();
         """
@@ -84,4 +95,11 @@ class RecorderEngine:
     def stop_recording(self):
         print("Stopping recording")
         self.is_recording = False
-        self.browser.close()
+        try:
+            self.browser.close()
+        except Exception as e:
+            # Browser may already have been closed by the user.
+            print("Browser already closed:", e)
+        finally:
+            self.browser.driver = None
+            self.driver = None

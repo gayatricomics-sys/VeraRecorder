@@ -6,8 +6,6 @@ import { spawn, ChildProcess } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const isDev = process.env.NODE_ENV !== 'production';
-
 let mainWindow: BrowserWindow | null = null;
 let apiProcess: ChildProcess | null = null;
 
@@ -38,6 +36,13 @@ function startBackend() {
 
     apiProcess.stderr?.on('data', (data) => {
       console.error(`API Error: ${data}`);
+    });
+
+    // Without this, a missing/non-executable backend binary emits an
+    // unhandled 'error' event and crashes the Electron main process.
+    apiProcess.on('error', (err) => {
+      console.error('Failed to start backend API:', err.message);
+      apiProcess = null;
     });
 
     apiProcess.on('close', (code) => {
