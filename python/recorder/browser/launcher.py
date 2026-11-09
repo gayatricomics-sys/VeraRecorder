@@ -76,6 +76,11 @@ class BrowserLauncher:
         chrome_options = Options()
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--allow-running-insecure-content")
+        # Test/staging apps scanned by DAST often use self-signed or expired
+        # certificates; without this Chrome stops on a "Privacy error" page and
+        # nothing can be recorded. This browser is only used for recording.
+        chrome_options.add_argument("--ignore-certificate-errors")
+        chrome_options.set_capability("acceptInsecureCerts", True)
         # Enable CDP for listening to DOM events
         chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 

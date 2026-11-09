@@ -22,8 +22,12 @@ export function RecorderScreen() {
   }
 
   const handleAutoCrawl = () => {
-    setUrl(targetUrl)
-    clearCommands()
+    // Keep steps already recorded in this session (e.g. a manual login) so the
+    // crawl is appended to them; only a brand-new session starts empty.
+    if (!isRecording) {
+      setUrl(targetUrl)
+      clearCommands()
+    }
     setCrawlMode('autocrawl')
     startRecording()
     wsService.sendCommand('START_AUTO_CRAWL', { url: targetUrl })
