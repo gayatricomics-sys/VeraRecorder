@@ -14,3 +14,13 @@ python/*.spec
 electron/dist/
 electron/dist-electron/
 electron/release/
+
+# Offline kit: large downloads produced by offline/prepare-offline-kit.sh
+offline/installers/
+offline/npm-cache/
+offline/electron-dist/
+offline/electron-builder-cache/
+python/drivers/chrome/
+python/drivers/chromedriver
+python/drivers/chromedriver.exe
+python/drivers/VERSION.txt
