@@ -37,9 +37,10 @@ pyinstaller --noconfirm --onedir --noupx --name api --paths . --collect-submodul
 ```
 
 ### Offline / air-gapped Windows install
-See [python/README_OFFLINE.md](python/README_OFFLINE.md). In short: run
-`offline/prepare-offline-kit.sh` on a machine with internet, copy the folder,
-then run `offline\build-windows.bat` on the offline Windows PC.
+Download **`VeraRecorder-offline-windows.zip`** from the
+[latest release](https://github.com/gayatricomics-sys/VeraRecorder/releases/latest),
+copy it to the offline Windows PC, unzip it, and run `offline\build-windows.bat`.
+Details: [python/README_OFFLINE.md](python/README_OFFLINE.md).
 
 ### 2. Build the Backend (Windows)
 ```cmd

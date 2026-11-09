@@ -31,7 +31,16 @@ call npm run build || goto :error
 
 echo === 3/3 Windows installer (from local Electron + NSIS cache)
 set "ELECTRON_BUILDER_CACHE=%KIT%electron-builder-cache"
-call npx --offline electron-builder --win --x64 --config.electronDist="%KIT%electron-dist" || goto :error
+REM The Electron runtime zip sits in offline\electron-cache\<hash>\ (shared
+REM with `npm run dev`); electron-builder takes that folder as electronDist.
+set "EDIST="
+for /d %%D in ("%KIT%electron-cache\*") do if exist "%%D\electron-v*-win32-x64.zip" set "EDIST=%%D"
+if not defined EDIST (
+  echo ERROR: Electron runtime not found in "%KIT%electron-cache".
+  echo Run offline/prepare-offline-kit.sh on a machine with internet first.
+  goto :error
+)
+call npx --offline electron-builder --win --x64 --config.electronDist="%EDIST%" || goto :error
 
 echo.
 echo Done. Installer: %ROOT%\electron\release\

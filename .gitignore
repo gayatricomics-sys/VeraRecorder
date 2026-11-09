@@ -19,6 +19,9 @@ electron/release/
 offline/installers/
 offline/npm-cache/
 offline/electron-dist/
+offline/.downloads/
+offline/KIT_VERSIONS.txt
+dist-offline/
 offline/electron-builder-cache/
 python/drivers/chrome/
 python/drivers/chromedriver
