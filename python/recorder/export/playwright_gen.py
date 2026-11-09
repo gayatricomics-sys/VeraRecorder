@@ -1,6 +1,17 @@
+import re
+
+
 class PlaywrightGenerator:
-    def __init__(self, project_name):
+    def __init__(self, project_name, base_url=""):
         self.project_name = project_name
+        self.base_url = base_url or ""
+
+    def _url(self, target):
+        """Resolve a recorded 'open' target (often "/" or a path) against the base URL."""
+        from urllib.parse import urljoin
+        if self.base_url and not re.match(r"^[a-z][a-z0-9+.-]*:", target or "", re.I):
+            return urljoin(self.base_url, target or "/")
+        return target or self.base_url
 
     @staticmethod
     def _q(text):
@@ -33,6 +44,17 @@ class PlaywrightGenerator:
             f"test('{self._q(self.project_name)} Recorded Session', async ({{ page }}) => {{"
         ]
         
+        # Recordings start on the target page without an explicit 'open' step;
+        
+        # without this the script would start on a blank page.
+        
+        first = next((c.get('command') for c in commands if c.get('command')), None)
+        
+        if self.base_url and first != 'open':
+        
+            script.append(f"  await page.goto('{self._q(self.base_url)}');")
+
+        
         for cmd in commands:
             c = cmd.get('command')
             t = cmd.get('target') or ''
@@ -44,7 +66,7 @@ class PlaywrightGenerator:
             # Filter out veracode specific wait commands if they aren't natively supported, 
             # though standard commands are what we expect.
             if c == 'open':
-                script.append(f"  await page.goto('{self._q(t)}');")
+                script.append(f"  await page.goto('{self._q(self._url(t))}');")
             elif c == 'click':
                 script.append(f"  await page.locator('{self._format_target(t)}').click();")
             elif c == 'type':

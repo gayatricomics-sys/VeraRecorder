@@ -27,11 +27,16 @@ class SideGenerator:
         
         # 1. Ensure the script starts with 'open'
         if not commands or commands[0]["command"] != "open":
+            # Open the page where recording started (e.g. /login.jsp), not
+            # just "/" (the site root), so replay begins on the right page.
+            from urllib.parse import urlsplit
+            parts = urlsplit(self.url or "")
+            start = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
             commands.insert(0, {
                 "id": f"cmd-prep-open",
                 "comment": "Veracode Best Practice: Always open base URL",
                 "command": "open",
-                "target": "/",
+                "target": start,
                 "targets": [],
                 "value": ""
             })

@@ -96,20 +96,37 @@ class RecordEventPayload(BaseModel):
     value: str = ""
     confidence: float = 0.95
 
-@app.post("/api/record")
-async def record_event(payload: RecordEventPayload):
+async def broadcast_command(command: str, target: str, value: str = "", confidence: float = 0.95):
     event_data = {
         "type": "COMMAND",
         "payload": {
             "id": str(uuid.uuid4()),
-            "command": payload.command,
-            "target": payload.target,
-            "value": payload.value,
-            "confidence": payload.confidence
-        }
+            "command": command,
+            "target": target,
+            "value": value or "",
+            "confidence": confidence,
+        },
     }
-    print(f"HTTP RECORD EVENT: {event_data}")
+    print(f"RECORD EVENT: {command} {target} {value!r}")
     await manager.broadcast(json.dumps(event_data))
+
+
+def _bind_recorder_events(loop):
+    """Forward steps from the browser (DevTools bridge, runs in its own thread)
+    to the app's WebSocket clients on the server's event loop."""
+    def on_event(ev: dict):
+        asyncio.run_coroutine_threadsafe(
+            broadcast_command(ev.get("command"), ev.get("target") or "", ev.get("value") or "",
+                              ev.get("confidence", 0.95)),
+            loop,
+        )
+    recorder_engine.on_event = on_event
+
+
+@app.post("/api/record")
+async def record_event(payload: RecordEventPayload):
+    # HTTP fallback, used only when the DevTools bridge could not start.
+    await broadcast_command(payload.command, payload.target, payload.value, payload.confidence)
     return {"status": "success"}
 
 @app.get("/api/exports")
@@ -177,9 +194,9 @@ async def save_export(req: SaveExportRequest):
                 
             # Regenerate PW and Cypress files
             project_name = req.filename[: -len(".side")]
-            pw_gen = PlaywrightGenerator(project_name)
+            pw_gen = PlaywrightGenerator(project_name, data.get("url", ""))
             pw_content = pw_gen.generate(req.commands)
-            cy_gen = CypressGenerator(project_name)
+            cy_gen = CypressGenerator(project_name, data.get("url", ""))
             cy_content = cy_gen.generate(req.commands)
             
             pw_path = os.path.join(exports_dir, f"{project_name}.spec.ts")
@@ -207,8 +224,8 @@ def _export_side(payload: dict) -> str:
         generator.add_command(cmd.get("command"), cmd.get("target", ""), cmd.get("value") or "")
     side_content = generator.generate()
 
-    pw_content = PlaywrightGenerator(project_name).generate(commands)
-    cy_content = CypressGenerator(project_name).generate(commands)
+    pw_content = PlaywrightGenerator(project_name, url).generate(commands)
+    cy_content = CypressGenerator(project_name, url).generate(commands)
 
     export_path = os.path.join(EXPORTS_DIR, f"{project_name}.side")
     with open(export_path, "w") as f:
@@ -234,6 +251,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Selenium calls block, so run them off the event loop to keep
                 # /api/record and other sockets responsive.
+                if action in ("START_RECORDING", "START_AUTO_CRAWL"):
+                    _bind_recorder_events(asyncio.get_running_loop())
+
                 if action == "START_RECORDING":
                     await asyncio.to_thread(recorder_engine.start_recording, payload.get("url") or "https://google.com")
                 elif action == "START_AUTO_CRAWL":

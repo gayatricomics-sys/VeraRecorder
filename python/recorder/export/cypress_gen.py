@@ -1,6 +1,17 @@
+import re
+
+
 class CypressGenerator:
-    def __init__(self, project_name):
+    def __init__(self, project_name, base_url=""):
         self.project_name = project_name
+        self.base_url = base_url or ""
+
+    def _url(self, target):
+        """Resolve a recorded 'open' target (often "/" or a path) against the base URL."""
+        from urllib.parse import urljoin
+        if self.base_url and not re.match(r"^[a-z][a-z0-9+.-]*:", target or "", re.I):
+            return urljoin(self.base_url, target or "/")
+        return target or self.base_url
 
     @staticmethod
     def _q(text):
@@ -28,6 +39,17 @@ class CypressGenerator:
             "  it('plays back successfully', () => {"
         ]
         
+        # Recordings start on the target page without an explicit 'open' step;
+        
+        # without this the script would start on a blank page.
+        
+        first = next((c.get('command') for c in commands if c.get('command')), None)
+        
+        if self.base_url and first != 'open':
+        
+            script.append(f"    cy.visit('{self._q(self.base_url)}');")
+
+        
         for cmd in commands:
             c = cmd.get('command')
             t = cmd.get('target') or ''
@@ -37,7 +59,7 @@ class CypressGenerator:
                 continue
                 
             if c == 'open':
-                script.append(f"    cy.visit('{self._q(t)}');")
+                script.append(f"    cy.visit('{self._q(self._url(t))}');")
             elif c == 'click':
                 if t.startswith('xpath='):
                     script.append(f"    cy.xpath('{self._format_target(t)}').click();")

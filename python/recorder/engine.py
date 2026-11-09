@@ -1,7 +1,7 @@
 from recorder.browser.launcher import BrowserLauncher
+from recorder.cdp_bridge import CdpRecorderBridge, BINDING_NAME
 from recorder.locator.engine import LocatorEngine
-from recorder.side.generator import SideGenerator
-import time
+
 
 class RecorderEngine:
     def __init__(self, ws_manager):
@@ -10,7 +10,11 @@ class RecorderEngine:
         self.ws_manager = ws_manager
         self.driver = None
         self.is_recording = False
-        
+        self.bridge = None
+        # Set by the API: called with {"command", "target", "value"} for every
+        # recorded step. Without it, steps are only delivered via HTTP fallback.
+        self.on_event = None
+
     def start_recording(self, url: str):
         print(f"Starting recording on {url}")
         if self.driver:
@@ -18,22 +22,27 @@ class RecorderEngine:
             self.stop_recording()
         self.driver = self.browser.launch_chrome(url)
         self.is_recording = True
-        
-        # Inject JavaScript to listen for events
-        # We will poll for events or rely on the frontend ws directly.
-        # For this prototype, we'll inject a script that communicates back to the Python backend via HTTP or WS.
-        
+
+        # The page calls window.__vrRecord (== cdp_bridge.BINDING_NAME).
         injection_script = """
         (function() {
             if (window.__verarecorder_injected) return;
             window.__verarecorder_injected = true;
             
             function sendEvent(command, target, value) {
+                const payload = JSON.stringify({ command, target, value, confidence: 0.95 });
+                // Preferred: CDP binding. Travels over the DevTools connection,
+                // so the site's Content-Security-Policy cannot block it.
+                if (typeof window.__vrRecord === 'function') {
+                    window.__vrRecord(payload);
+                    return;
+                }
+                // Fallback (only if the DevTools bridge could not start).
                 fetch('http://127.0.0.1:8000/api/record', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     keepalive: true,
-                    body: JSON.stringify({ command, target, value, confidence: 0.95 })
+                    body: payload
                 }).catch(e => console.error("VeraRecorder Sync Error:", e));
             }
 
@@ -84,6 +93,19 @@ class RecorderEngine:
             }
         })();
         """
+        assert BINDING_NAME == "__vrRecord"
+        # Preferred path: our own DevTools connection installs the script and
+        # the binding in every tab and receives each recorded step directly.
+        try:
+            address = self.driver.capabilities["goog:chromeOptions"]["debuggerAddress"]
+            self.bridge = CdpRecorderBridge(address, injection_script, self._emit)
+            self.bridge.start()
+            print(f"Recording via DevTools connection ({address})")
+            return
+        except Exception as e:
+            print("DevTools recorder unavailable, falling back to HTTP:", e)
+            self.bridge = None
+
         try:
             # Inject into current page
             self.driver.execute_script(injection_script)
@@ -92,9 +114,16 @@ class RecorderEngine:
         except Exception as e:
             print("Failed to inject script", e)
 
+    def _emit(self, event: dict):
+        if self.on_event and event.get("command"):
+            self.on_event(event)
+
     def stop_recording(self):
         print("Stopping recording")
         self.is_recording = False
+        if self.bridge:
+            self.bridge.stop()
+            self.bridge = None
         try:
             self.browser.close()
         except Exception as e:
