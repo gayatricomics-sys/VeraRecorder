@@ -26,8 +26,20 @@ call "%ROOT%\python\build_backend.bat" || goto :error
 echo === 2/3 Frontend packages (from local npm cache)
 cd /d "%ROOT%\electron"
 set ELECTRON_SKIP_BINARY_DOWNLOAD=1
-call npm ci --offline --cache "%KIT%npm-cache" --no-audit --no-fund || goto :error
-call npm run build || goto :error
+call npm ci --offline --include=dev --cache "%KIT%npm-cache" --no-audit --no-fund || goto :error
+REM Fail early with a clear message instead of "'tsc' is not recognized".
+for %%P in (typescript\bin\tsc vite\bin\vite.js electron-builder\cli.js) do (
+  if not exist "node_modules\%%P" (
+    echo ERROR: node_modules\%%P is missing after npm ci.
+    echo The npm install did not complete. Check the npm errors above, and that
+    echo antivirus is not removing files from "%cd%\node_modules".
+    goto :error
+  )
+)
+REM Run the tools through node directly, not through node_modules\.bin\*.cmd
+REM launchers (those can be missing or blocked on locked-down PCs).
+call node node_modules\typescript\bin\tsc -b || goto :error
+call node node_modules\vite\bin\vite.js build || goto :error
 
 echo === 3/3 Windows installer (from local Electron + NSIS cache)
 set "ELECTRON_BUILDER_CACHE=%KIT%electron-builder-cache"
@@ -40,7 +52,7 @@ if not defined EDIST (
   echo Run offline/prepare-offline-kit.sh on a machine with internet first.
   goto :error
 )
-call npx --offline electron-builder --win --x64 --config.electronDist="%EDIST%" || goto :error
+call node node_modules\electron-builder\cli.js --win --x64 --config.electronDist="%EDIST%" || goto :error
 
 echo.
 echo Done. Installer: %ROOT%\electron\release\
