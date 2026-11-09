@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KIT="$ROOT/offline"
 PYTHON_VERSION="${PYTHON_VERSION:-3.12.10}"   # must match wheels/windows (cp312)
 
-mkdir -p "$KIT/installers" "$KIT/npm-cache" "$KIT/electron-dist" "$KIT/electron-builder-cache"
+mkdir -p "$KIT/installers" "$KIT/npm-cache" "$KIT/electron-dist" "$KIT/electron-cache" "$KIT/electron-builder-cache"
 
 fetch() { # dest url [fallback-url...]  -- stops the script if every URL fails
   local dest="$1"; shift
@@ -62,6 +62,10 @@ EZ="electron-v$ELECTRON_VERSION-win32-x64.zip"
 fetch "$KIT/electron-dist/$EZ" \
       "https://github.com/electron/electron/releases/download/v$ELECTRON_VERSION/$EZ" \
       "https://npmmirror.com/mirrors/electron/$ELECTRON_VERSION/$EZ"
+# Electron 43 downloads its runtime on first launch (`npm run dev`); seed the
+# cache it reads (electron_config_cache, set in electron/vite.config.ts).
+( cd "$ROOT/electron" && [ -d node_modules ] || npm ci )
+node "$KIT/seed-electron-cache.mjs" "$ROOT/electron" "$KIT/electron-dist/$EZ" "$KIT/electron-cache" win32 x64
 
 echo "== 5/5 electron-builder tools for Windows (NSIS, rcedit/winCodeSign, 7-Zip)"
 # Pre-fetch the exact archives electron-builder needs when building on

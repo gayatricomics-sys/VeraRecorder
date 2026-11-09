@@ -12,7 +12,8 @@ whole `VeraRecorder` folder is copied over (USB drive, network share, etc.).
 | Python packages for macOS (Apple Silicon, Python 3.9) | `python/wheels/` | Yes |
 | Chrome for Testing + matching ChromeDriver (win64) | `python/drivers/` | No (too large) |
 | Python and Node.js installers | `offline/installers/` | No |
-| npm packages for Windows x64 | `offline/npm-cache/` | No |
+| npm packages for Windows x64 | `offline/npm-cache/` (used automatically via `electron/.npmrc`) | No |
+| Electron runtime cache for `npm run dev` | `offline/electron-cache/` (used automatically via `electron/vite.config.ts`) | No |
 | Electron runtime for Windows | `offline/electron-dist/` | No |
 | NSIS installer tools | `offline/electron-builder-cache/` | No |
 
@@ -51,6 +52,25 @@ offline\build-windows.bat
 This installs the Python wheels from `python\wheels\windows`, builds the
 backend with PyInstaller, installs npm packages from the local cache, and
 creates the installer in `electron\release\`.
+
+## Using npm directly (development)
+
+You can also run npm yourself in the `electron` folder with no internet:
+
+```cmd
+cd electron
+npm install
+npm run dev
+```
+
+- `electron\.npmrc` points npm at `..\offline\npm-cache`, so `npm install`
+  and `npm ci` install every package from the bundled cache.
+- Electron 43 downloads its runtime the first time it starts. `vite.config.ts`
+  points that download at `..\offline\electron-cache`, so `npm run dev` works
+  offline too.
+- If you see `ENOTCACHED`, the `offline\npm-cache` folder was not copied, or
+  `package-lock.json` changed after the kit was made. Re-run
+  `offline/prepare-offline-kit.sh` on a machine with internet.
 
 ## Step 3: Install on other offline PCs
 
