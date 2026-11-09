@@ -1,37 +1,52 @@
 # Offline Installation Guide (Windows)
 
-VeraRecorder can be built and run on a Windows PC with **no internet**.
-Everything it needs is downloaded once on a machine *with* internet, then the
-whole `VeraRecorder` folder is copied over (USB drive, network share, etc.).
+VeraRecorder can be built and run on a Windows x64 PC with **no internet**.
+Everything it needs comes in one Windows-only download,
+`VeraRecorder-offline-windows.zip` (about 570 MB). Nothing in it is for macOS.
 
-## What is bundled
+## Step 1: Get the offline kit (on any machine WITH internet)
+
+**Option A: download it from GitHub Releases (easiest).**
+
+Download `VeraRecorder-offline-windows.zip` from the
+[latest release](https://github.com/gayatricomics-sys/VeraRecorder/releases/latest)
+(direct link:
+<https://github.com/gayatricomics-sys/VeraRecorder/releases/latest/download/VeraRecorder-offline-windows.zip>).
+Copy it to the offline Windows PC (USB drive, network share, etc.) and unzip it.
+You get a `VeraRecorder` folder.
+
+> Don't use GitHub's green **Code > Download ZIP** button or `git clone` for the
+> offline PC. Those only contain the source; the large Windows files (Chrome,
+> Electron, npm packages, installers) are too big for git and exist only in the
+> release zip.
+
+**Option B: make the kit yourself** (macOS, Linux, or Git Bash on Windows;
+needs `node`, `curl`, `unzip`, `python3`):
+
+```bash
+./offline/prepare-offline-kit.sh --zip
+```
+
+This fills `offline/` and `python/drivers/` and writes
+`dist-offline/VeraRecorder-offline-windows.zip`. Copy the zip (or the whole
+folder) to the offline PC.
+
+## What is in the kit
 
 | Part | Where | In git? |
 |------|-------|---------|
 | Python packages for Windows x64, **Python 3.10, 3.11 or 3.12**, + PyInstaller | `python/wheels/windows/` (Python 3.12 versions in `python/requirements-windows.lock.txt`) | Yes |
-| Python packages for macOS (Apple Silicon, Python 3.9) | `python/wheels/` | Yes |
-| Chrome for Testing + matching ChromeDriver (win64) | `python/drivers/` | No (too large) |
-| Python and Node.js installers | `offline/installers/` | No |
-| npm packages for Windows x64 | `offline/npm-cache/` (used automatically via `electron/.npmrc`) | No |
-| Electron runtime cache for `npm run dev` | `offline/electron-cache/` (used automatically via `electron/vite.config.ts`) | No |
-| Electron runtime for Windows | `offline/electron-dist/` | No |
-| NSIS installer tools | `offline/electron-builder-cache/` | No |
+| Chrome for Testing + matching ChromeDriver (win64) | `python/drivers/` | No (zip only) |
+| Python and Node.js installers for Windows | `offline/installers/` | No (zip only) |
+| npm packages for Windows x64 | `offline/npm-cache/` (used automatically via `electron/.npmrc`) | No (zip only) |
+| Electron runtime for Windows: `npm run dev` and the installer build | `offline/electron-cache/` | No (zip only) |
+| Installer build tools (NSIS, rcedit, 7-Zip) for Windows | `offline/electron-builder-cache/` | No (zip only) |
 
-The items not in git are downloaded by `offline/prepare-offline-kit.sh`.
+Exact versions are listed in `offline/KIT_VERSIONS.txt` inside the zip.
 
 The app uses the bundled Chrome and ChromeDriver, so recording never tries to
 download a driver. (Without them, Selenium downloads ChromeDriver on first
 use, which fails offline.)
-
-## Step 1: Prepare the kit (machine WITH internet)
-
-On macOS, Linux, or Git Bash on Windows (needs `node`, `curl`, `unzip`, `python3`):
-
-```bash
-./offline/prepare-offline-kit.sh
-```
-
-Then copy the whole `VeraRecorder` folder to the offline Windows PC.
 
 ## Step 2: Build on the offline Windows PC
 
@@ -68,9 +83,10 @@ npm run dev
 - Electron 43 downloads its runtime the first time it starts. `vite.config.ts`
   points that download at `..\offline\electron-cache`, so `npm run dev` works
   offline too.
-- If you see `ENOTCACHED`, the `offline\npm-cache` folder was not copied, or
-  `package-lock.json` changed after the kit was made. Re-run
-  `offline/prepare-offline-kit.sh` on a machine with internet.
+- If you see `ENOTCACHED`, the folder didn't come from the offline kit zip
+  (e.g. it was cloned from GitHub), or `package-lock.json` changed after the
+  kit was made. Get the latest kit zip, or re-run
+  `offline/prepare-offline-kit.sh --zip` on a machine with internet.
 
 ## Step 3: Install on other offline PCs
 
@@ -106,8 +122,5 @@ venv\Scripts\activate
 python -m pip install --no-index --find-links=wheels\windows -r requirements.txt
 ```
 
-macOS (Apple Silicon, Python 3.9):
-
-```bash
-pip install --no-index --find-links=wheels/ -r requirements.txt
-```
+The repository also has macOS wheels (Apple Silicon, Python 3.9) in
+`python/wheels/` for development on a Mac; they are not part of the Windows kit.
