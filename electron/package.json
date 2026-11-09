@@ -73,9 +73,8 @@
     },
     "extraResources": [
       {
-        "from": "../python/dist",
-        "to": "api",
-        "filter": ["api", "api.exe"]
+        "from": "../python/dist/api",
+        "to": "api"
       }
     ]
   }

@@ -33,21 +33,22 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install pyinstaller
-pyinstaller --name api --onefile --paths . --collect-submodules uvicorn api/main.py
+pyinstaller --noconfirm --onedir --noupx --name api --paths . --collect-submodules uvicorn api/main.py
 ```
+
+### Offline / air-gapped Windows install
+See [python/README_OFFLINE.md](python/README_OFFLINE.md). In short: run
+`offline/prepare-offline-kit.sh` on a machine with internet, copy the folder,
+then run `offline\build-windows.bat` on the offline Windows PC.
 
 ### 2. Build the Backend (Windows)
 ```cmd
 cd python
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-pip install pyinstaller
-pyinstaller --name api --onefile --paths . --collect-submodules uvicorn api\main.py
+build_backend.bat
 ```
 
 ### 3. Package the App
-Once the PyInstaller backend binary (`api` or `api.exe`) is generated in the `python/dist/` directory, build the Electron frontend:
+Once the PyInstaller backend (`api` or `api.exe`) is generated in the `python/dist/api/` directory, build the Electron frontend:
 ```bash
 cd electron
 npm install

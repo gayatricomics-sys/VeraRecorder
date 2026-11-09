@@ -13,12 +13,13 @@ function startBackend() {
   const isWin = process.platform === 'win32';
   const apiExecutable = isWin ? 'api.exe' : 'api';
   
+  // The backend is a PyInstaller folder build (python/dist/api/), not a
+  // single self-extracting exe: --onefile builds are frequently flagged by
+  // Windows Defender.
   let apiPath: string;
   if (!app.isPackaged) {
-    // In dev, the binary is in python/dist
-    apiPath = path.join(__dirname, '../../python/dist', apiExecutable);
+    apiPath = path.join(__dirname, '../../python/dist/api', apiExecutable);
   } else {
-    // In production, the binary is in resources
     apiPath = path.join(process.resourcesPath, 'api', apiExecutable);
   }
 
@@ -26,8 +27,10 @@ function startBackend() {
   
   try {
     apiProcess = spawn(apiPath, [], {
+      cwd: path.dirname(apiPath),
       detached: false,
-      stdio: 'pipe'
+      stdio: 'pipe',
+      windowsHide: true,
     });
 
     apiProcess.stdout?.on('data', (data) => {
