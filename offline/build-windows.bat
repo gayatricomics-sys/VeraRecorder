@@ -6,7 +6,10 @@ setlocal
 set "ROOT=%~dp0.."
 set "KIT=%~dp0"
 
-where python >nul 2>nul || (
+set "HAVEPY="
+where py >nul 2>nul && set HAVEPY=1
+where python >nul 2>nul && set HAVEPY=1
+if not defined HAVEPY (
   echo Python not found. Install it from "%KIT%installers\python-*-amd64.exe"
   echo  ^(tick "Add python.exe to PATH"^), then open a new terminal and re-run.
   exit /b 1

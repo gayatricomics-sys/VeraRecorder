@@ -8,7 +8,7 @@ whole `VeraRecorder` folder is copied over (USB drive, network share, etc.).
 
 | Part | Where | In git? |
 |------|-------|---------|
-| Python packages for Windows (Python 3.12, x64) + PyInstaller | `python/wheels/windows/` (exact versions in `python/requirements-windows.lock.txt`) | Yes |
+| Python packages for Windows x64, **Python 3.10, 3.11 or 3.12**, + PyInstaller | `python/wheels/windows/` (Python 3.12 versions in `python/requirements-windows.lock.txt`) | Yes |
 | Python packages for macOS (Apple Silicon, Python 3.9) | `python/wheels/` | Yes |
 | Chrome for Testing + matching ChromeDriver (win64) | `python/drivers/` | No (too large) |
 | Python and Node.js installers | `offline/installers/` | No |
@@ -35,7 +35,12 @@ Then copy the whole `VeraRecorder` folder to the offline Windows PC.
 ## Step 2: Build on the offline Windows PC
 
 1. Install Python from `offline\installers\python-3.12.*-amd64.exe`
-   (tick **Add python.exe to PATH**).
+   (tick **Add python.exe to PATH**). It can sit next to another Python;
+   the build picks 3.12 automatically through the `py` launcher.
+
+   > **Python 3.13 or newer will not work.** The pinned `websockets==12.0` and
+   > `pydantic-core==2.18.4` have no Windows builds for it, so pip reports
+   > *"No matching distribution found for websockets==12.0"*. Use 3.10–3.12.
 2. Install Node.js from `offline\installers\node-*-x64.msi`.
 3. Open a new Command Prompt in the `VeraRecorder` folder and run:
 
@@ -72,11 +77,13 @@ a false positive.
 
 ## Installing only the Python packages
 
+Use Python 3.10, 3.11 or 3.12 (here via the `py` launcher):
+
 ```cmd
 cd python
-python -m venv venv
+py -3.12 -m venv venv
 venv\Scripts\activate
-pip install --no-index --find-links=wheels\windows -r requirements.txt
+python -m pip install --no-index --find-links=wheels\windows -r requirements.txt
 ```
 
 macOS (Apple Silicon, Python 3.9):
