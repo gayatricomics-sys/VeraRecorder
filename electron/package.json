@@ -5,13 +5,13 @@
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "pack": "electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
+    "dev": "node node_modules/vite/bin/vite.js",
+    "build": "node node_modules/typescript/bin/tsc -b && node node_modules/vite/bin/vite.js build",
+    "pack": "node node_modules/electron-builder/cli.js --dir",
+    "dist": "npm run build && node node_modules/electron-builder/cli.js",
+    "dist:win": "npm run build && node node_modules/electron-builder/cli.js --win",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "node node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
