@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Plus, Settings, History, FileCode, Wand2 } from 'lucide-react'
+import { useStore } from '../store/useStore'
 
 interface ExportFile {
   name: string;
@@ -15,16 +16,36 @@ export function Dashboard() {
   const navigate = useNavigate()
   const [exports, setExports] = useState<ExportFile[]>([])
 
+  const exportsVersion = useStore((s) => s.exportsVersion)
+
+  // Re-fetch whenever an export finishes (the save happens asynchronously after
+  // navigating back here), and retry while the bundled backend is still starting.
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/exports')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.files) {
-          setExports(data.files)
-        }
-      })
-      .catch(err => console.error('Failed to fetch exports', err))
-  }, [])
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    const load = (attempt: number) => {
+      fetch('http://127.0.0.1:8000/api/exports')
+        .then(res => res.json())
+        .then(data => {
+          if (!cancelled && data && data.files) {
+            setExports(data.files)
+          }
+        })
+        .catch(err => {
+          if (cancelled) return
+          if (attempt < 10) {
+            retryTimer = setTimeout(() => load(attempt + 1), 1000)
+          } else {
+            console.error('Failed to fetch exports', err)
+          }
+        })
+    }
+    load(0)
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [exportsVersion])
 
   const handleOpenExport = (filename: string) => {
     if (filename.endsWith('.side')) {

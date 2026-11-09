@@ -33,7 +33,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install pyinstaller
-pyinstaller --name api --onefile api/main.py
+pyinstaller --name api --onefile --paths . --collect-submodules uvicorn api/main.py
 ```
 
 ### 2. Build the Backend (Windows)
@@ -43,7 +43,7 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 pip install pyinstaller
-pyinstaller --name api --onefile api\main.py
+pyinstaller --name api --onefile --paths . --collect-submodules uvicorn api\main.py
 ```
 
 ### 3. Package the App
@@ -58,3 +58,7 @@ npm run dist:win
 ```
 
 The output standalone installer will be placed in `electron/release/`.
+
+### Where exports are saved
+- Running from source (`python api/main.py`): `python/exports/`
+- Packaged app: `~/VeraRecorder/exports/` (override with the `VERARECORDER_EXPORTS_DIR` env var)

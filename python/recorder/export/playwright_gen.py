@@ -2,7 +2,16 @@ class PlaywrightGenerator:
     def __init__(self, project_name):
         self.project_name = project_name
 
+    @staticmethod
+    def _q(text):
+        """Escape a value for use inside a single-quoted JS string."""
+        return str(text if text is not None else "").replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
+
     def _format_target(self, target):
+        return self._q(self._raw_target(target))
+
+    def _raw_target(self, target):
+        target = target or ""
         if target.startswith('id='):
             return f"#{target[3:]}"
         elif target.startswith('name='):
@@ -10,7 +19,9 @@ class PlaywrightGenerator:
         elif target.startswith('css='):
             return target[4:]
         elif target.startswith('xpath='):
-            return target[6:]
+            # Keep the explicit engine prefix: Playwright only auto-detects
+            # XPath for selectors starting with "//", not "/html/...".
+            return target
         elif target.startswith('linkText='):
             return f"text={target[9:]}"
         return target
@@ -19,13 +30,13 @@ class PlaywrightGenerator:
         script = [
             "import { test, expect } from '@playwright/test';",
             "",
-            f"test('{self.project_name} Recorded Session', async ({{ page }}) => {{"
+            f"test('{self._q(self.project_name)} Recorded Session', async ({{ page }}) => {{"
         ]
         
         for cmd in commands:
             c = cmd.get('command')
-            t = cmd.get('target', '')
-            v = cmd.get('value', '')
+            t = cmd.get('target') or ''
+            v = cmd.get('value') or ''
             
             if not c:
                 continue
@@ -33,20 +44,20 @@ class PlaywrightGenerator:
             # Filter out veracode specific wait commands if they aren't natively supported, 
             # though standard commands are what we expect.
             if c == 'open':
-                script.append(f"  await page.goto('{t}');")
+                script.append(f"  await page.goto('{self._q(t)}');")
             elif c == 'click':
                 script.append(f"  await page.locator('{self._format_target(t)}').click();")
             elif c == 'type':
                 # Playwright uses fill for typing into inputs
-                script.append(f"  await page.locator('{self._format_target(t)}').fill('{v}');")
+                script.append(f"  await page.locator('{self._format_target(t)}').fill('{self._q(v)}');")
             elif c == 'select':
                 # format is usually label=Value
                 val = v.replace('label=', '')
-                script.append(f"  await page.locator('{self._format_target(t)}').selectOption({{ label: '{val}' }});")
+                script.append(f"  await page.locator('{self._format_target(t)}').selectOption({{ label: '{self._q(val)}' }});")
             elif c == 'assertElementPresent' or c == 'waitForElementPresent':
                 script.append(f"  await expect(page.locator('{self._format_target(t)}')).toBeVisible();")
             elif c == 'pause':
-                script.append(f"  await page.waitForTimeout({v});")
+                script.append(f"  await page.waitForTimeout({int(v) if str(v).isdigit() else 0});")
 
         script.append("});")
         return "\n".join(script)

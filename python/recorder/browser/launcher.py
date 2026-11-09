@@ -20,5 +20,7 @@ class BrowserLauncher:
 
     def close(self):
         if self.driver:
-            self.driver.quit()
-            self.driver = None
+            try:
+                self.driver.quit()
+            finally:
+                self.driver = None

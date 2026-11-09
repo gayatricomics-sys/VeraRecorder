@@ -43,15 +43,11 @@ export default function EditorScreen() {
   }, [filename])
 
   const handleValueChange = (index: number, newValue: string) => {
-    const updated = [...commands]
-    updated[index].value = newValue
-    setCommands(updated)
+    setCommands(prev => prev.map((c, i) => (i === index ? { ...c, value: newValue } : c)))
   }
-  
+
   const handleTargetChange = (index: number, newTarget: string) => {
-    const updated = [...commands]
-    updated[index].target = newTarget
-    setCommands(updated)
+    setCommands(prev => prev.map((c, i) => (i === index ? { ...c, target: newTarget } : c)))
   }
 
   const saveScript = async () => {
@@ -132,7 +128,7 @@ export default function EditorScreen() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {commands.map((cmd, idx) => (
-                  <tr key={cmd.id} className="hover:bg-white/[0.02] transition-colors">
+                  <tr key={cmd.id || idx} className="hover:bg-white/[0.02] transition-colors">
                     <td className="p-3">
                       <span className="inline-block px-2 py-1 bg-indigo-500/10 text-indigo-400 text-xs font-mono rounded border border-indigo-500/20">
                         {cmd.command}
@@ -149,7 +145,7 @@ export default function EditorScreen() {
                     <td className="p-3">
                       <input 
                         type="text" 
-                        value={cmd.value} 
+                        value={cmd.value ?? ''} 
                         onChange={e => handleValueChange(idx, e.target.value)}
                         placeholder="e.g. ${TOTP_SECRET}"
                         className="w-full bg-black/40 border border-white/10 focus:border-indigo-500 rounded px-3 py-1.5 text-sm text-white font-mono transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 placeholder-slate-600"
