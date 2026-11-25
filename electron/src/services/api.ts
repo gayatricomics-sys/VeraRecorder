@@ -31,6 +31,7 @@ export class WebSocketService {
 
     socket.onopen = () => {
       console.log('Connected to Backend WebSocket')
+      useStore.getState().setConnected(true)
       const queued = this.pending
       this.pending = []
       queued.forEach((msg) => socket.send(msg))
@@ -45,6 +46,12 @@ export class WebSocketService {
           useStore.getState().bumpExports()
         } else if (data.type === 'ERROR') {
           console.error('Backend error:', data.message)
+          const state = useStore.getState()
+          state.setError(data.message || 'Unknown error from the backend')
+          // Starting failed (bad URL, Chrome could not start...): not recording.
+          if (data.action === 'START_RECORDING' || (data.action === 'START_AUTO_CRAWL' && !state.commands.length)) {
+            state.stopRecording()
+          }
         }
       } catch {
         // Ignore non-JSON messages
@@ -55,6 +62,7 @@ export class WebSocketService {
       if (this.socket !== socket) return
       this.socket = null
       console.log('Disconnected from Backend WebSocket')
+      useStore.getState().setConnected(false)
       if (this.shouldReconnect) {
         this.reconnectTimer = setTimeout(() => this.connect(), 3000)
       }

@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,28 +81,58 @@ function createWindow() {
   });
 }
 
+// Stop the backend AND everything it started (chromedriver, Chrome). On
+// Windows, ChildProcess.kill() only ends api.exe and leaves the recording
+// browser and chromedriver.exe running after the app closes.
+function stopBackend() {
+  if (!apiProcess || apiProcess.pid === undefined) return;
+  const pid = apiProcess.pid;
+  apiProcess = null;
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch (err) {
+    console.error('Failed to stop backend:', err);
+  }
+}
+
+// A second copy of the app would start a second backend on the same port.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   startBackend();
   createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
+      // macOS keeps the app alive after the window closes (backend stopped).
+      if (!apiProcess) startBackend();
       createWindow();
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  if (apiProcess) {
-    apiProcess.kill();
-  }
+  stopBackend();
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  if (apiProcess) {
-    apiProcess.kill();
-  }
+  stopBackend();
 });

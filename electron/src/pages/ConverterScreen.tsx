@@ -8,14 +8,16 @@ export default function ConverterScreen() {
   const [scriptContent, setScriptContent] = useState('')
   const [status, setStatus] = useState<'idle' | 'converting' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const [skipped, setSkipped] = useState<{ line: number; text: string }[]>([])
 
   const handleConvert = async () => {
     if (!scriptContent.trim()) {
       setStatus('error')
-      setMessage('Please paste a Playwright script first.')
+      setMessage(`Please paste a ${format === 'playwright' ? 'Playwright' : 'Cypress'} script first.`)
       return
     }
 
+    setSkipped([])
     setStatus('converting')
     setMessage('Converting script to .SIDE format...')
 
@@ -37,7 +39,8 @@ export default function ConverterScreen() {
       const result = await response.json()
       if (result.status === 'success') {
         setStatus('success')
-        setMessage(`Successfully converted and saved to: ${result.path}`)
+        setMessage(`${result.message}. Saved to: ${result.path}`)
+        setSkipped(result.skipped || [])
       } else {
         setStatus('error')
         setMessage(`Failed to convert: ${result.message}`)
@@ -155,6 +158,18 @@ export default function ConverterScreen() {
               {message}
             </div>
           )}
+
+          {skipped.length > 0 && (
+            <div className="p-4 rounded-xl border backdrop-blur-sm text-sm bg-amber-500/10 border-amber-500/20 text-amber-100 space-y-2">
+              <p className="font-medium">{skipped.length} line(s) could not be converted and were left out:</p>
+              <ul className="font-mono text-xs space-y-1 max-h-40 overflow-y-auto">
+                {skipped.map(s => (
+                  <li key={s.line}>line {s.line}: {s.text}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-200/80">Supported: goto/visit, click, fill/type, selectOption/select, check.</p>
+            </div>
+          )}
         </div>
 
         {/* Right Col - Code Input */}
@@ -171,8 +186,8 @@ export default function ConverterScreen() {
                 value={scriptContent}
                 onChange={(e) => setScriptContent(e.target.value)}
                 placeholder={format === 'playwright' 
-                  ? "Paste your Playwright script here...\\n\\nExample:\\nawait page.goto('https://testfire.net');\\nawait page.locator('#query').fill('admin');\\nawait page.getByRole('button', { name: 'Go' }).click();"
-                  : "Paste your Cypress script here...\\n\\nExample:\\ncy.visit('https://testfire.net');\\ncy.get('#query').type('admin');\\ncy.contains('Go').click();"}
+                  ? "Paste your Playwright script here...\n\nExample:\nawait page.goto('https://testfire.net');\nawait page.locator('#query').fill('admin');\nawait page.getByRole('button', { name: 'Go' }).click();"
+                  : "Paste your Cypress script here...\n\nExample:\ncy.visit('https://testfire.net');\ncy.get('#query').type('admin');\ncy.contains('Go').click();"}
                 className="flex-1 w-full p-4 bg-transparent resize-none focus:outline-none text-slate-300 font-mono text-sm leading-relaxed"
                 spellCheck="false"
               />

@@ -9,12 +9,17 @@ import { useState } from 'react'
 
 export function RecorderScreen() {
   const navigate = useNavigate()
-  const { url, setUrl, isRecording, commands, startRecording, stopRecording, clearCommands } = useStore()
+  const { url, setUrl, isRecording, commands, startRecording, stopRecording, clearCommands, error, setError, connected } = useStore()
   const [targetUrl, setTargetUrl] = useState(url)
   const [projectName, setProjectName] = useState('VeraRecording')
   const [crawlMode, setCrawlMode] = useState('manualcrawl')
 
   const handleStart = () => {
+    if (!targetUrl.trim()) {
+      setError('Enter the URL of the site to record (e.g. https://app.example.com/login).')
+      return
+    }
+    setError(null)
     setUrl(targetUrl)
     clearCommands()
     startRecording()
@@ -22,6 +27,7 @@ export function RecorderScreen() {
   }
 
   const handleAutoCrawl = () => {
+    setError(null)
     // Keep steps already recorded in this session (e.g. a manual login) so the
     // crawl is appended to them; only a brand-new session starts empty.
     if (!isRecording) {
@@ -95,6 +101,19 @@ export function RecorderScreen() {
           )}
         </div>
       </header>
+
+      {!connected && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm px-6 py-2">
+          Not connected to the VeraRecorder backend yet. If this does not go away, restart the app
+          (another program may be using port 8000).
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="bg-red-50 border-b border-red-200 text-red-700 text-sm px-6 py-2 flex items-center justify-between gap-4">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 text-xs underline shrink-0">Dismiss</button>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Main Content Area */}

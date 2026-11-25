@@ -72,7 +72,10 @@ class BrowserLauncher:
     def __init__(self):
         self.driver = None
 
-    def launch_chrome(self, url: str):
+    def launch_chrome(self, url: str = None):
+        """Start Chrome. Navigates to ``url`` only if given (the recorder
+        navigates itself, after the browser is registered, so a page that fails
+        to load cannot leave an orphaned Chrome window)."""
         chrome_options = Options()
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--allow-running-insecure-content")
@@ -97,7 +100,8 @@ class BrowserLauncher:
             # Falls back to Selenium Manager (needs internet the first time).
             print("No bundled ChromeDriver found; falling back to Selenium Manager")
             self.driver = webdriver.Chrome(options=chrome_options)
-        self.driver.get(url)
+        if url:
+            self.driver.get(url)
         return self.driver
 
     def close(self):

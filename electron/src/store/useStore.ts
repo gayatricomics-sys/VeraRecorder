@@ -14,6 +14,12 @@ interface RecorderState {
   commands: RecorderCommand[]
   exportsVersion: number
   bumpExports: () => void
+  /** Last error reported by the backend, shown to the user. */
+  error: string | null
+  setError: (error: string | null) => void
+  /** Whether the app is connected to the local backend. */
+  connected: boolean
+  setConnected: (connected: boolean) => void
   setUrl: (url: string) => void
   startRecording: () => void
   stopRecording: () => void
@@ -26,6 +32,10 @@ export const useStore = create<RecorderState>((set) => ({
   url: '',
   commands: [],
   exportsVersion: 0,
+  error: null,
+  setError: (error) => set({ error }),
+  connected: false,
+  setConnected: (connected) => set({ connected }),
   bumpExports: () => set((state) => ({ exportsVersion: state.exportsVersion + 1 })),
   setUrl: (url) => set({ url }),
   startRecording: () => set({ isRecording: true }),
