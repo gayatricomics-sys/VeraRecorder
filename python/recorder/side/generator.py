@@ -1,5 +1,13 @@
 import json
 
+
+def _strategy(target: str) -> str:
+    for prefix, name in (("id=", "id"), ("name=", "name"), ("css=", "css:finder"),
+                         ("xpath=", "xpath:position"), ("linkText=", "linkText"), ("link=", "linkText")):
+        if target.startswith(prefix):
+            return name
+    return "css:finder"
+
 class SideGenerator:
     def __init__(self, project_name: str, url: str):
         self.project_name = project_name
@@ -17,7 +25,8 @@ class SideGenerator:
             "comment": "",
             "command": command,
             "target": target,
-            "targets": [[target, "xpath"]],
+            # Selenium IDE pairs each locator with its strategy name.
+            "targets": [[target, _strategy(target)]] if target else [],
             "value": value
         })
         
@@ -33,7 +42,7 @@ class SideGenerator:
             parts = urlsplit(self.url or "")
             start = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
             commands.insert(0, {
-                "id": f"cmd-prep-open",
+                "id": "cmd-prep-open",
                 "comment": "Veracode Best Practice: Always open base URL",
                 "command": "open",
                 "target": start,

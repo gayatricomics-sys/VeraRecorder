@@ -77,11 +77,11 @@ export function Dashboard() {
             <CardDescription className="text-blue-600">Convert Playwright and Cypress scripts to Veracode DAST format</CardDescription>
           </CardHeader>
         </Card>
-        <Card className="bg-white border-blue-200 shadow-sm hover:border-blue-400 transition-all cursor-pointer">
+        <Card className="bg-white border-blue-200 shadow-sm opacity-70" aria-disabled="true">
           <CardHeader>
             <Settings className="w-8 h-8 text-emerald-600 mb-2" />
             <CardTitle className="text-blue-900">Configuration</CardTitle>
-            <CardDescription className="text-blue-600">Manage browser profiles and proxies</CardDescription>
+            <CardDescription className="text-blue-600">Manage browser profiles and proxies (coming soon)</CardDescription>
           </CardHeader>
         </Card>
 
@@ -99,17 +99,17 @@ export function Dashboard() {
                 {exports.slice(0, 5).map(f => (
                   <li 
                     key={f.name} 
-                    className="flex justify-between items-center py-2 px-2 -mx-2 border-b border-blue-100 last:border-0 cursor-pointer hover:bg-blue-50 rounded transition-colors"
+                    className="flex justify-between items-center gap-2 py-2 px-2 -mx-2 border-b border-blue-100 last:border-0 cursor-pointer hover:bg-blue-50 rounded transition-colors"
                     onClick={() => handleOpenExport(f.name)}
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <FileCode className="w-4 h-4 text-blue-600" />
-                        <span className="font-medium text-blue-900">{f.name}</span>
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileCode className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="font-medium text-blue-900 truncate" title={f.name}>{f.name}</span>
                       </div>
-                      <span className="text-[10px] text-blue-400/80 font-mono pl-6" title={f.path}>{f.path}</span>
+                      <span className="text-[10px] text-blue-400/80 font-mono pl-6 truncate" title={f.path}>{f.path}</span>
                     </div>
-                    <span className="text-blue-500 text-xs">
+                    <span className="text-blue-500 text-xs shrink-0 text-right">
                       {new Date(f.modified * 1000).toLocaleDateString()} {new Date(f.modified * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
                   </li>

@@ -1,151 +1,133 @@
-import time
 import random
+import re
+import time
 import urllib.parse
+
+from selenium.common.exceptions import StaleElementReferenceException, WebDriverException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException, StaleElementReferenceException
+
+# Links that would end the session being crawled (and so break a login script).
+_LOGOUT = re.compile(r"log\s*-?\s*out|sign\s*-?\s*out|logoff|sign\s*off|abmelden|déconnexion", re.I)
+# Fill values by input type. Values only need to be plausible for a crawl.
+_VALUES = {"email": "test@example.com", "password": "admin", "uid": "admin",
+           "tel": "5550100", "number": "1", "url": "https://example.com", "search": "test"}
+_FILLABLE = {"text", "email", "password", "uid", "search", "tel", "number", "url"}
+
 
 class AutoCrawler:
-    def __init__(self, driver, max_steps=5):
+    def __init__(self, driver, max_steps=5, max_errors=5):
         self.driver = driver
         self.max_steps = max_steps
+        self.max_errors = max_errors
         self.filled_elements = set()
+        self.visited = set()
 
     def crawl(self):
         print(f"Starting autonomous crawl... max steps: {self.max_steps}")
-        steps = 0
-        
-        while steps < self.max_steps:
-            time.sleep(2) # Wait for page and JS injections to settle
+        steps = errors = 0
+        while steps < self.max_steps and errors < self.max_errors:
+            time.sleep(2)  # let the page and the recorder script settle
             try:
-                # 1. Find text/password/email inputs and fill them (one at a time)
-                inputs = self.driver.find_elements(By.TAG_NAME, "input")
-                filled_any = False
-                filled_form = None
-                for inp in inputs:
-                    if not inp.is_displayed():
-                        continue
-                    
-                    input_name = inp.get_attribute("name") or ""
-                    input_id = inp.get_attribute("id") or ""
-                    identifier = f"{input_name}_{input_id}"
-                    
-                    # Prevent duplicate fills by checking if we already marked this element
-                    if inp.get_attribute("data-autocrawler-filled") == "true":
-                        continue
-                    if identifier != "_" and identifier in self.filled_elements:
-                        continue
-                    
-                    # Only fill empty inputs so we don't repeatedly fill the same one
-                    # Use get_property to read the current DOM state instead of HTML attribute
-                    current_val = inp.get_property("value")
-                    if current_val and str(current_val).strip() != "":
-                        continue
-                        
-                    input_type = inp.get_attribute("type")
-                    if input_type in ["text", "email", "password", "uid"]:
-                        value = "admin" if input_type == "uid" else "testuser"
-                        if input_type == "email":
-                            value = "test@example.com"
-                        elif input_type == "password":
-                            value = "admin"
-                            
-                        # Clear and send keys
-                        try:
-                            inp.clear()
-                            inp.send_keys(value)
-                            # Mark in the actual DOM so it survives element re-fetches
-                            self.driver.execute_script("arguments[0].setAttribute('data-autocrawler-filled', 'true');", inp)
-                            if identifier != "_":
-                                self.filled_elements.add(identifier)
-                                
-                            # Keep track of the form this input belongs to
-                            try:
-                                filled_form = inp.find_element(By.XPATH, "./ancestor::form")
-                            except Exception:
-                                filled_form = None
-                                
-                            filled_any = True
-                            time.sleep(0.5) # Slight pause to simulate typing cadence
-                            break # Once one input is filled, go to the next things on the page
-                        except Exception as e:
-                            print(f"Crawler error filling input: {e}")
-
-                # 2. If we filled forms, look for a submit button
-                if filled_any:
-                    print("Filled forms, looking for submit button...")
-                    
-                    if filled_form:
-                        buttons = filled_form.find_elements(By.TAG_NAME, "input") + filled_form.find_elements(By.TAG_NAME, "button")
-                    else:
-                        buttons = self.driver.find_elements(By.TAG_NAME, "input") + self.driver.find_elements(By.TAG_NAME, "button")
-                        
-                    submit_btn = None
-                    for b in buttons:
-                        b_type = b.get_attribute("type")
-                        b_value = b.get_attribute("value") or ""
-                        b_name = b.get_attribute("name") or ""
-                        if not b.is_displayed():
-                            continue
-                            
-                        if b_type == "submit" or "login" in b_value.lower() or "submit" in b_name.lower():
-                            submit_btn = b
-                            break
-                            
-                    if submit_btn:
-                        print("Clicking submit button.")
-                        submit_btn.click()
-                        steps += 1
-                        continue # Start next loop since page likely navigated
-                    else:
-                        print("Filled input but no submit button found yet. Continuing to next input...")
-                        continue # Start next loop to fill other inputs
-                
-                # 3. If no forms filled, let's look for navigation links
-                print("Looking for links to navigate...")
-                
-                # Get current origin to restrict crawling
-                current_url = self.driver.current_url
-                current_domain = urllib.parse.urlparse(current_url).netloc
-                
-                links = self.driver.find_elements(By.TAG_NAME, "a")
-                valid_links = []
-                for l in links:
-                    if l.is_displayed():
-                        href = l.get_attribute("href")
-                        if href:
-                            href_domain = urllib.parse.urlparse(href).netloc
-                            
-                            # Determine base domains by stripping www.
-                            base_current = current_domain[4:] if current_domain.startswith("www.") else current_domain
-                            base_href = href_domain[4:] if href_domain.startswith("www.") else href_domain
-                            
-                            # Allow if same domain, parent domain, or subdomain
-                            is_allowed = (
-                                not href_domain or 
-                                base_href == base_current or 
-                                base_href.endswith("." + base_current) or 
-                                base_current.endswith("." + base_href)
-                            )
-                            
-                            if is_allowed:
-                                valid_links.append(l)
-                
-                
-                if valid_links:
-                    link_to_click = random.choice(valid_links)
-                    print(f"Clicking link: {link_to_click.get_attribute('href')}")
-                    link_to_click.click()
+                if self._fill_and_submit() or self._click_link():
                     steps += 1
+                    errors = 0
                 else:
                     print("No interactable elements found. Stopping crawl.")
                     break
-                    
             except StaleElementReferenceException:
-                print("Page navigating... continuing crawl loop.")
+                # The page navigated while we looked at it; count it so a page
+                # that keeps changing cannot loop forever.
+                errors += 1
             except WebDriverException as e:
-                print(f"WebDriver exception during crawl: {e}")
+                if not self._browser_alive():
+                    print("Browser closed; stopping crawl.")
+                    break
+                errors += 1
+                print(f"Crawl step failed ({errors}/{self.max_errors}): {str(e).splitlines()[0][:160]}")
+            except Exception as e:  # e.g. connection refused once Chrome is gone
+                print(f"Crawl stopped: {e!r}")
                 break
-                
         print("Autonomous crawl finished.")
+
+    # -- steps ------------------------------------------------------------
+    def _fill_and_submit(self) -> bool:
+        """Fill one empty visible input, then submit its form if there is a button."""
+        for inp in self.driver.find_elements(By.TAG_NAME, "input"):
+            if not inp.is_displayed() or not inp.is_enabled():
+                continue
+            input_type = (inp.get_attribute("type") or "text").lower()
+            if input_type not in _FILLABLE:
+                continue
+            identifier = f"{inp.get_attribute('name') or ''}_{inp.get_attribute('id') or ''}"
+            if inp.get_attribute("data-autocrawler-filled") == "true":
+                continue
+            if identifier != "_" and identifier in self.filled_elements:
+                continue
+            if str(inp.get_property("value") or "").strip():
+                continue  # only fill empty inputs
+
+            inp.clear()
+            inp.send_keys(_VALUES.get(input_type, "testuser"))
+            # Mark in the DOM so it survives element re-fetches.
+            self.driver.execute_script("arguments[0].setAttribute('data-autocrawler-filled', 'true');", inp)
+            if identifier != "_":
+                self.filled_elements.add(identifier)
+            time.sleep(0.5)
+
+            try:
+                form = inp.find_element(By.XPATH, "./ancestor::form")
+            except WebDriverException:
+                form = None
+            scope = form or self.driver
+            for b in scope.find_elements(By.CSS_SELECTOR, "button, input[type=submit], input[type=image]"):
+                if not b.is_displayed() or not b.is_enabled():
+                    continue
+                b_type = (b.get_attribute("type") or "submit").lower()
+                label = " ".join(filter(None, [b.get_attribute("value"), b.get_attribute("name"), b.text]))
+                if b_type in ("submit", "image") or re.search(r"login|log in|sign in|submit|go|search", label, re.I):
+                    if _LOGOUT.search(label):
+                        continue
+                    print("Filled input, clicking submit button.")
+                    b.click()
+                    return True
+            # Filled a field but found no button yet: keep going on this page.
+            return True
+        return False
+
+    def _click_link(self) -> bool:
+        current = urllib.parse.urlparse(self.driver.current_url)
+        base_current = current.netloc[4:] if current.netloc.startswith("www.") else current.netloc
+        candidates = []
+        for a in self.driver.find_elements(By.TAG_NAME, "a"):
+            if not a.is_displayed():
+                continue
+            href = a.get_attribute("href") or ""
+            parsed = urllib.parse.urlparse(href)
+            if parsed.scheme not in ("http", "https"):
+                continue  # mailto:, tel:, javascript:, ...
+            if _LOGOUT.search(href) or _LOGOUT.search(a.text or ""):
+                continue
+            base_href = parsed.netloc[4:] if parsed.netloc.startswith("www.") else parsed.netloc
+            same_site = (base_href == base_current or base_href.endswith("." + base_current)
+                         or base_current.endswith("." + base_href))
+            if same_site:
+                candidates.append((href.split("#")[0], a))
+        if not candidates:
+            return False
+        # Prefer pages not visited yet.
+        fresh = [c for c in candidates if c[0] not in self.visited] or candidates
+        href, link = random.choice(fresh)
+        self.visited.add(href)
+        print(f"Clicking link: {href}")
+        try:
+            link.click()
+        except WebDriverException:
+            # Covered by an overlay or similar; click it the way a script would.
+            self.driver.execute_script("arguments[0].click();", link)
+        return True
+
+    def _browser_alive(self) -> bool:
+        try:
+            return len(self.driver.window_handles) > 0
+        except Exception:
+            return False

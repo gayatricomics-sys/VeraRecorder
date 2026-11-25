@@ -7,6 +7,15 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BASE_DIR not in sys.path:
     sys.path.insert(0, _BASE_DIR)
 
+# On Windows, stdout/stderr default to the system code page (e.g. cp1252) when
+# piped to Electron; printing recorded text such as "東京" or "✓" then raised
+# UnicodeEncodeError and the step was lost. Always use UTF-8, never crash on it.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -15,8 +24,9 @@ import json
 import uuid
 import subprocess
 import re
+import threading
 from pydantic import BaseModel
-from recorder.engine import RecorderEngine
+from recorder.engine import NavigationError, RecorderEngine
 from recorder.crawler import AutoCrawler
 from converter.playwright_converter import PlaywrightConverter
 from converter.cypress_converter import CypressConverter
@@ -45,6 +55,21 @@ def _export_path(filename: str):
     if not name or name != filename:
         return None
     return os.path.join(EXPORTS_DIR, name)
+
+
+def normalize_url(url: str):
+    """Accept what people type. Returns (url, fallback_url).
+
+    "app.example.com/login" -> ("https://app.example.com/login", "http://app.example.com/login"):
+    Chrome rejects URLs without a scheme ("invalid argument"), and internal apps
+    are often HTTP-only, so http:// is tried if the https:// guess fails.
+    """
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("Enter the URL of the site to record (e.g. https://app.example.com/login).")
+    if not re.match(r"^[a-z][a-z0-9+.-]*://", url, re.I) and not url.startswith(("about:", "data:", "file:")):
+        return "https://" + url, "http://" + url
+    return url, None
 
 
 def _safe_project_name(name: str) -> str:
@@ -164,7 +189,7 @@ async def open_export(filename: str):
 async def read_export(filename: str):
     file_path = _export_path(filename)
     if file_path and os.path.exists(file_path) and filename.endswith(".side"):
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return {"status": "success", "data": data}
     return {"status": "error", "message": "File not found or invalid type"}
@@ -182,14 +207,14 @@ async def save_export(req: SaveExportRequest):
     file_path = _export_path(req.filename)
 
     if file_path and os.path.exists(file_path) and req.filename.endswith(".side"):
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             
         # Update commands in the first test
         if "tests" in data and len(data["tests"]) > 0:
             data["tests"][0]["commands"] = req.commands
             
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
                 
             # Regenerate PW and Cypress files
@@ -202,9 +227,9 @@ async def save_export(req: SaveExportRequest):
             pw_path = os.path.join(exports_dir, f"{project_name}.spec.ts")
             cy_path = os.path.join(exports_dir, f"{project_name}.cy.js")
             
-            with open(pw_path, "w") as f:
+            with open(pw_path, "w", encoding="utf-8") as f:
                 f.write(pw_content)
-            with open(cy_path, "w") as f:
+            with open(cy_path, "w", encoding="utf-8") as f:
                 f.write(cy_content)
                 
             return {"status": "success", "message": "Saved successfully"}
@@ -216,7 +241,14 @@ def _export_side(payload: dict) -> str:
     from recorder.export.cypress_gen import CypressGenerator
 
     project_name = _safe_project_name(payload.get("projectName", "VeraRecording"))
-    url = payload.get("url") or "https://example.com"
+    # Prefer the address the recording browser actually opened: the app sends
+    # what the user typed, which may lack https:// (invalid in page.goto/cy.visit).
+    url = recorder_engine.start_url
+    if not url:
+        try:
+            url = normalize_url(payload.get("url"))[0]
+        except ValueError:
+            url = "https://example.com"
     commands = payload.get("commands") or []
 
     generator = SideGenerator(project_name, url)
@@ -228,14 +260,17 @@ def _export_side(payload: dict) -> str:
     cy_content = CypressGenerator(project_name, url).generate(commands)
 
     export_path = os.path.join(EXPORTS_DIR, f"{project_name}.side")
-    with open(export_path, "w") as f:
+    with open(export_path, "w", encoding="utf-8") as f:
         f.write(side_content)
-    with open(os.path.join(EXPORTS_DIR, f"{project_name}.spec.ts"), "w") as f:
+    with open(os.path.join(EXPORTS_DIR, f"{project_name}.spec.ts"), "w", encoding="utf-8") as f:
         f.write(pw_content)
-    with open(os.path.join(EXPORTS_DIR, f"{project_name}.cy.js"), "w") as f:
+    with open(os.path.join(EXPORTS_DIR, f"{project_name}.cy.js"), "w", encoding="utf-8") as f:
         f.write(cy_content)
     print(f"Exported {project_name} (.side/.spec.ts/.cy.js) to {EXPORTS_DIR}")
     return export_path
+
+
+_crawl_thread = None
 
 
 @app.websocket("/ws")
@@ -244,6 +279,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            action = None
             try:
                 command = json.loads(data)
                 action = command.get("action")
@@ -255,16 +291,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     _bind_recorder_events(asyncio.get_running_loop())
 
                 if action == "START_RECORDING":
-                    await asyncio.to_thread(recorder_engine.start_recording, payload.get("url") or "https://google.com")
+                    url, fallback = normalize_url(payload.get("url"))
+                    await asyncio.to_thread(recorder_engine.start_recording, url, fallback)
                 elif action == "START_AUTO_CRAWL":
-                    if not recorder_engine.driver:
-                        await asyncio.to_thread(recorder_engine.start_recording, payload.get("url") or "https://google.com")
+                    global _crawl_thread
+                    if _crawl_thread and _crawl_thread.is_alive():
+                        raise RuntimeError("Auto Crawl is already running.")
+                    # (Re)open the browser if there is none or the user closed it.
+                    if not await asyncio.to_thread(recorder_engine.browser_alive):
+                        url, fallback = normalize_url(payload.get("url"))
+                        await asyncio.to_thread(recorder_engine.start_recording, url, fallback)
                     else:
                         print("Auto Crawl triggered on existing browser session")
 
-                    import threading
                     crawler = AutoCrawler(recorder_engine.driver, max_steps=6)
-                    threading.Thread(target=crawler.crawl, daemon=True).start()
+                    _crawl_thread = threading.Thread(target=crawler.crawl, name="auto-crawl", daemon=True)
+                    _crawl_thread.start()
                 elif action == "STOP_RECORDING":
                     await asyncio.to_thread(recorder_engine.stop_recording)
                 elif action == "RECORDED_EVENT":
@@ -284,12 +326,17 @@ async def websocket_endpoint(websocket: WebSocket):
                     await manager.send_personal_message(json.dumps({"type": "EXPORT_SUCCESS", "path": export_path}), websocket)
             except WebSocketDisconnect:
                 raise
+            except NavigationError as e:
+                # Browser is open and recording; only the start page failed.
+                await manager.send_personal_message(json.dumps(
+                    {"type": "ERROR", "action": "NAVIGATION", "message": str(e)}), websocket)
             except Exception as e:
                 # One failing action (e.g. user closed Chrome manually) must not
                 # kill the socket, otherwise the following EXPORT_SIDE is lost.
                 print(f"Error handling websocket message: {e!r}")
                 try:
-                    await manager.send_personal_message(json.dumps({"type": "ERROR", "message": str(e)}), websocket)
+                    await manager.send_personal_message(json.dumps(
+                        {"type": "ERROR", "action": action, "message": str(e).splitlines()[0] if str(e) else repr(e)}), websocket)
                 except Exception:
                     pass
     except WebSocketDisconnect:
@@ -303,40 +350,44 @@ def start_server():
     uvicorn.run(app, host="127.0.0.1", port=8000)
 
 
-class PlaywrightConvertRequest(BaseModel):
+class ConvertRequest(BaseModel):
     scriptContent: str
     projectName: str
     targetUrl: str
 
 @app.post("/api/convert/playwright")
-async def convert_playwright(req: PlaywrightConvertRequest):
+async def convert_playwright(req: ConvertRequest):
     try:
         converter = PlaywrightConverter(req.scriptContent, req.projectName, req.targetUrl)
         side_content = converter.convert()
         
         filename = f"{_safe_project_name(req.projectName)}_playwright_converted.side"
         export_path = os.path.join(EXPORTS_DIR, filename)
-        
-        with open(export_path, "w") as f:
+
+        with open(export_path, "w", encoding="utf-8") as f:
             f.write(side_content)
-            
-        return {"status": "success", "message": f"Saved {filename}", "path": export_path}
+
+        steps = len(json.loads(side_content)["tests"][0]["commands"])
+        return {"status": "success", "message": f"Saved {filename} ({steps} steps)", "path": export_path,
+                "skipped": [{"line": n, "text": t} for n, t in converter.skipped]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 @app.post("/api/convert/cypress")
-async def convert_cypress(req: PlaywrightConvertRequest):
+async def convert_cypress(req: ConvertRequest):
     try:
         converter = CypressConverter(req.scriptContent, req.projectName, req.targetUrl)
         side_content = converter.convert()
         
         filename = f"{_safe_project_name(req.projectName)}_cypress_converted.side"
         export_path = os.path.join(EXPORTS_DIR, filename)
-        
-        with open(export_path, "w") as f:
+
+        with open(export_path, "w", encoding="utf-8") as f:
             f.write(side_content)
-            
-        return {"status": "success", "message": f"Saved {filename}", "path": export_path}
+
+        steps = len(json.loads(side_content)["tests"][0]["commands"])
+        return {"status": "success", "message": f"Saved {filename} ({steps} steps)", "path": export_path,
+                "skipped": [{"line": n, "text": t} for n, t in converter.skipped]}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
